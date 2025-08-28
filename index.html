@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban de Karla - Seguimiento de Tareas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        h1, h2, h3, h4 {
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        :root {
+            --purple-50: #faf7ff;
+            --purple-100: #f3edff;
+            --purple-200: #e9d8ff;
+            --purple-300: #d8b4fe;
+            --purple-400: #c084fc;
+            --purple-500: #a855f7;
+            --purple-600: #9333ea;
+            --purple-700: #7c3aed;
+            --purple-800: #6b21a8;
+            --baby-blue-50: #f0f9ff;
+            --baby-blue-100: #e0f2fe;
+            --baby-blue-200: #bae6fd;
+            --baby-blue-300: #7dd3fc;
+            --baby-blue-400: #38bdf8;
+            --baby-blue-500: #0ea5e9;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --slate-600: #475569;
+            --slate-700: #334155;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes confetti-fall {
+            0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .task-card {
+            animation: slideIn 0.4s ease-out;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(171, 130, 255, 0.2);
+        }
+        
+        .task-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(171, 130, 255, 0.25);
+            border-color: rgba(171, 130, 255, 0.3);
+        }
+        
+        .float-animation {
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        .column-header {
+            background: linear-gradient(135deg, var(--purple-300) 0%, var(--baby-blue-300) 50%, var(--purple-400) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .column-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 3s infinite;
+        }
+        
+        .modal-overlay {
+            animation: fadeIn 0.3s ease-out;
+            backdrop-filter: blur(15px);
+        }
+        
+        .priority-high { 
+            border-left: 4px solid var(--purple-500);
+            background: linear-gradient(to right, rgba(171, 130, 255, 0.08), transparent);
+        }
+        .priority-medium { 
+            border-left: 4px solid var(--baby-blue-400);
+            background: linear-gradient(to right, rgba(56, 189, 248, 0.08), transparent);
+        }
+        .priority-low { 
+            border-left: 4px solid var(--baby-blue-300);
+            background: linear-gradient(to right, rgba(125, 211, 252, 0.08), transparent);
+        }
+        
+        .sortable-ghost {
+            opacity: 0.6;
+            transform: scale(1.02);
+            background: rgba(171, 130, 255, 0.15);
+        }
+        
+        .stats-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(125, 211, 252, 0.2);
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 25px 50px rgba(125, 211, 252, 0.25);
+            border-color: rgba(125, 211, 252, 0.3);
+        }
+        
+        .chart-container {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(125, 211, 252, 0.2);
+            border-radius: 20px;
+        }
+        
+        .tag-style {
+            background: linear-gradient(135deg, rgba(171, 130, 255, 0.12) 0%, rgba(125, 211, 252, 0.12) 100%);
+            color: var(--slate-600);
+            font-weight: 500;
+            border: 1px solid rgba(125, 211, 252, 0.25);
+        }
+        
+        .achievement-badge {
+            background: linear-gradient(135deg, var(--baby-blue-300) 0%, var(--purple-300) 100%);
+            animation: pulse 3s infinite;
+        }
+
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .aesthetic-button {
+            background: linear-gradient(135deg, var(--purple-400) 0%, var(--baby-blue-400) 100%);
+            transition: all 0.3s ease;
+            border: none;
+            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.3);
+        }
+
+        .aesthetic-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(125, 211, 252, 0.4);
+            background: linear-gradient(135deg, var(--purple-500) 0%, var(--baby-blue-500) 100%);
+        }
+
+        .kanban-container {
+            display: flex;
+            gap: 1.5rem;
+            overflow-x: auto;
+            padding-bottom: 1rem;
+        }
+
+        .kanban-column {
+            flex: 0 0 350px;
+            min-width: 350px;
+        }
+
+        .kanban-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .kanban-container::-webkit-scrollbar-track {
+            background: linear-gradient(90deg, rgba(171, 130, 255, 0.1), rgba(125, 211, 252, 0.1));
+            border-radius: 4px;
+        }
+
+        .kanban-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(90deg, var(--purple-300), var(--baby-blue-300));
+            border-radius: 4px;
+        }
+
+        .kanban-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(90deg, var(--purple-400), var(--baby-blue-400));
+        }
+
+        @media (max-width: 768px) {
+            .kanban-column {
+                flex: 0 0 280px;
+                min-width: 280px;
+            }
+        }
+
+        .motivational-section {
+            background: linear-gradient(135deg, rgba(171, 130, 255, 0.12) 0%, rgba(125, 211, 252, 0.12) 50%, rgba(171, 130, 255, 0.12) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(125, 211, 252, 0.25);
+        }
+
+        .header-icon {
+            background: linear-gradient(135deg, var(--purple-400) 0%, var(--baby-blue-400) 100%);
+        }
+
+        .stats-icon {
+            background: linear-gradient(135deg, var(--baby-blue-400) 0%, var(--purple-400) 100%);
+        }
+
+        .floating-icon {
+            animation: float 3s ease-in-out infinite;
+            filter: drop-shadow(0 4px 8px rgba(125, 211, 252, 0.3));
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-50 via-baby-blue-50 to-purple-100 min-h-screen">
+    <!-- Header -->
+    <header class="glass-effect shadow-lg border-b border-baby-blue-200">
+        <div class="container mx-auto px-6 py-6">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 header-icon rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg floating-icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold text-slate-700">
+                            Kanban de Karla
+                        </h1>
+                        <p class="text-slate-600 font-medium">Seguimiento de tareas</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <button onclick="kanban.openModal()" class="aesthetic-button text-white px-6 py-3 rounded-xl font-semibold">
+                        <i class="fas fa-plus mr-2"></i>Agregar Tarea
+                    </button>
+                    <button onclick="kanban.showStats()" class="aesthetic-button text-white px-6 py-3 rounded-xl font-semibold">
+                        <i class="fas fa-chart-line mr-2"></i>Mis Estadísticas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Stats Dashboard -->
+    <div id="statsPanel" class="hidden container mx-auto px-6 py-8">
+        <div class="text-center mb-8">
+            <div class="mx-auto w-20 h-20 stats-icon rounded-2xl flex items-center justify-center text-white text-3xl mb-4 shadow-lg">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-slate-700 mb-2">Panel de Estadísticas</h2>
+            <p class="text-slate-600 font-medium">Analiza tu progreso y productividad</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="stats-card p-6 rounded-2xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-600 font-semibold text-sm">Total de Tareas</p>
+                        <p id="totalTasks" class="text-3xl font-bold text-slate-700">0</p>
+                    </div>
+                    <i class="fas fa-list-ul text-3xl text-baby-blue-400"></i>
+                </div>
+            </div>
+            <div class="stats-card p-6 rounded-2xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-600 font-semibold text-sm">Completadas</p>
+                        <p id="completedTasks" class="text-3xl font-bold text-slate-700">0</p>
+                    </div>
+                    <i class="fas fa-check-circle text-3xl text-baby-blue-400"></i>
+                </div>
+            </div>
+            <div class="stats-card p-6 rounded-2xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-600 font-semibold text-sm">En Progreso</p>
+                        <p id="progressTasks" class="text-3xl font-bold text-slate-700">0</p>
+                    </div>
+                    <i class="fas fa-clock text-3xl text-baby-blue-400"></i>
+                </div>
+            </div>
+            <div class="stats-card p-6 rounded-2xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-600 font-semibold text-sm">Progreso</p>
+                        <p id="progressPercentage" class="text-3xl font-bold text-slate-700">0%</p>
+                    </div>
+                    <i class="fas fa-percentage text-3xl text-baby-blue-400"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="chart-container p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-400 to-baby-blue-400 rounded-xl flex items-center justify-center text-white">
+                        <i class="fas fa-chart-pie text-sm"></i>
+                    </div>
+                    <h3 class="text-slate-700 text-xl font-bold">Distribución de Tareas</h3>
+                </div>
+                <canvas id="tasksChart" width="400" height="200"></canvas>
+            </div>
+            <div class="chart-container p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-gradient-to-br from-baby-blue-400 to-purple-400 rounded-xl flex items-center justify-center text-white">
+                        <i class="fas fa-chart-bar text-sm"></i>
+                    </div>
+                    <h3 class="text-slate-700 text-xl font-bold">Tareas por Prioridad</h3>
+                </div>
+                <canvas id="priorityChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <h3 class="text-2xl font-bold text-slate-700 text-center mb-6">🏆 Logros Desbloqueados</h3>
+            <div id="achievementBadges" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+        </div>
+    </div>
+
+    <!-- Kanban Board Horizontal -->
+    <main class="container mx-auto px-6 py-8">
+        <div class="kanban-container">
+            <!-- Por Hacer -->
+            <div class="kanban-column glass-effect rounded-2xl shadow-xl p-6 border-l-4 border-baby-blue-300">
+                <div class="column-header text-center py-4 rounded-xl mb-6 relative">
+                    <div class="flex items-center justify-center gap-3 mb-2">
+                        <div class="w-12 h-12 bg-white bg-opacity-40 rounded-xl flex items-center justify-center float-animation">
+                            <i class="fas fa-lightbulb text-white text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center justify-center gap-2">
+                                Por Hacer
+                                <span id="todoCount" class="bg-white bg-opacity-40 px-3 py-1 rounded-full text-sm">0</span>
+                            </h2>
+                            <p class="text-sm opacity-90">Ideas pendientes</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="todoColumn" class="space-y-4" style="min-height: 400px;"></div>
+            </div>
+
+            <!-- En Progreso -->
+            <div class="kanban-column glass-effect rounded-2xl shadow-xl p-6 border-l-4 border-purple-300">
+                <div class="column-header text-center py-4 rounded-xl mb-6 relative">
+                    <div class="flex items-center justify-center gap-3 mb-2">
+                        <div class="w-12 h-12 bg-white bg-opacity-40 rounded-xl flex items-center justify-center float-animation">
+                            <i class="fas fa-cog fa-spin text-white text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center justify-center gap-2">
+                                En Progreso
+                                <span id="progressCount" class="bg-white bg-opacity-40 px-3 py-1 rounded-full text-sm">0</span>
+                            </h2>
+                            <p class="text-sm opacity-90">En desarrollo</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="progressColumn" class="space-y-4" style="min-height: 400px;"></div>
+            </div>
+
+            <!-- Completado -->
+            <div class="kanban-column glass-effect rounded-2xl shadow-xl p-6 border-l-4 border-baby-blue-400">
+                <div class="column-header text-center py-4 rounded-xl mb-6 relative">
+                    <div class="flex items-center justify-center gap-3 mb-2">
+                        <div class="w-12 h-12 bg-white bg-opacity-40 rounded-xl flex items-center justify-center float-animation">
+                            <i class="fas fa-check text-white text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center justify-center gap-2">
+                                Completado
+                                <span id="doneCount" class="bg-white bg-opacity-40 px-3 py-1 rounded-full text-sm">0</span>
+                            </h2>
+                            <p class="text-sm opacity-90">Tareas finalizadas</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="doneColumn" class="space-y-4" style="min-height: 400px;"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Sección Motivacional -->
+    <footer class="container mx-auto px-6 py-6">
+        <div class="motivational-section rounded-xl p-4 text-center">
+            <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+                <img src="https://placehold.co/80x100" alt="Adorable cartoon bear scientist wearing round purple glasses and white lab coat, holding a green beaker with bubbling liquid, wearing purple dress underneath with pink backpack, drawn in kawaii art style with soft pastel colors" style="max-width: 80px; border-radius: 10px;" />
+                <div class="text-center md:text-left">
+                    <blockquote class="text-sm md:text-base font-semibold text-slate-700 mb-1">
+                        "Nada en la vida debe ser temido, solo comprendido."
+                    </blockquote>
+                    <cite class="text-xs text-slate-600">- Marie Curie</cite>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal para agregar/editar tareas -->
+    <div id="taskModal" class="fixed inset-0 bg-slate-900 bg-opacity-20 z-50 hidden modal-overlay">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 transform transition-all border border-baby-blue-200">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-400 to-baby-blue-400 rounded-xl flex items-center justify-center text-white">
+                            <i class="fas fa-edit"></i>
+                        </div>
+                        <h3 id="modalTitle" class="text-2xl font-bold text-slate-700">Nueva Tarea</h3>
+                    </div>
+                    <button onclick="kanban.closeModal()" class="text-baby-blue-400 hover:text-baby-blue-600 text-2xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="taskForm" class="space-y-6">
+                    <div>
+                        <label class="block text-slate-700 text-sm font-semibold mb-2">Título de la Tarea</label>
+                        <input type="text" id="taskTitle" class="w-full px-4 py-3 border border-baby-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-baby-blue-300 focus:border-transparent transition-all" placeholder="Describe tu tarea..." required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-slate-700 text-sm font-semibold mb-2">Descripción</label>
+                        <textarea id="taskDescription" rows="3" class="w-full px-4 py-3 border border-baby-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-baby-blue-300 focus:border-transparent transition-all" placeholder="Detalles adicionales..."></textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-slate-700 text-sm font-semibold mb-2">Prioridad</label>
+                        <select id="taskPriority" class="w-full px-4 py-3 border border-baby-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-baby-blue-300 focus:border-transparent transition-all">
+                            <option value="low">Baja</option>
+                            <option value="medium">Media</option>
+                            <option value="high">Alta</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-slate-700 text-sm font-semibold mb-2">Fecha Límite</label>
+                        <input type="date" id="taskDueDate" class="w-full px-4 py-3 border border-baby-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-baby-blue-300 focus:border-transparent transition-all">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-slate-700 text-sm font-semibold mb-2">Etiquetas (separadas por comas)</label>
+                        <input type="text" id="taskTags" class="w-full px-4 py-3 border border-baby-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-baby-blue-300 focus:border-transparent transition-all" placeholder="trabajo, personal, estudio">
+                    </div>
+                    
+                    <div class="flex gap-3 pt-4">
+                        <button type="submit" class="flex-1 bg-gradient-to-r from-purple-400 to-baby-blue-400 hover:from-purple-500 hover:to-baby-blue-500 text-white py-3 px-4 rounded-xl transition-all duration-200 font-semibold">
+                            <i class="fas fa-save mr-2"></i>Guardar
+                        </button>
+                        <button type="button" onclick="kanban.closeModal()" class="flex-1 bg-gradient-to-r from-gray-300 to-gray-400 hover:from-gray-400 hover:to-gray-500 text-white py-3 px-4 rounded-xl transition-all duration-200 font-semibold">
+                            <i class="fas fa-times mr-2"></i>Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Celebration Animation -->
+    <div id="celebration" class="fixed inset-0 pointer-events-none z-40 hidden">
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
+            <div class="w-32 h-32 bg-gradient-to-br from-purple-400 to-baby-blue-400 rounded-2xl flex items-center justify-center text-white text-5xl mx-auto mb-4 shadow-xl">
+                <i class="fas fa-star"></i>
+            </div>
+            <div class="text-3xl font-bold text-purple-600">¡Tarea Completada!</div>
+            <div class="text-lg text-slate-600">¡Excelente trabajo, Karla!</div>
+        </div>
+    </div>
+
+    <script>
+        class KanbanBoard {
+            constructor() {
+                this.tasks = JSON.parse(localStorage.getItem('kanbanTasks')) || [];
+                this.currentEditId = null;
+                this.charts = {};
+                this.achievements = JSON.parse(localStorage.getItem('kanbanAchievements')) || [
+                    { id: 'first_task', name: 'Primera Tarea', description: 'Creaste tu primera tarea', icon: '🎯', unlocked: false },
+                    { id: 'task_master', name: 'Organizadora', description: 'Completaste 5 tareas', icon: '⭐', unlocked: false },
+                    { id: 'productivity_pro', name: 'Productiva', description: 'Completaste 10 tareas', icon: '🏆', unlocked: false },
+                    { id: 'task_queen', name: 'Maestra de Tareas', description: 'Completaste 20 tareas', icon: '👑', unlocked: false }
+                ];
+                this.init();
+            }
+
+            init() {
+                this.renderTasks();
+                this.initSortable();
+                this.setupEventListeners();
+                this.updateStats();
+                setTimeout(() => this.initCharts(), 100);
+                this.checkAchievements();
+            }
+
+            setupEventListeners() {
+                document.getElementById('taskForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveTask();
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && !document.getElementById('taskModal').classList.contains('hidden')) {
+                        this.closeModal();
+                    }
+                });
+            }
+
+            initSortable() {
+                const columns = ['todoColumn', 'progressColumn', 'doneColumn'];
+                const statuses = ['todo', 'progress', 'done'];
+
+                columns.forEach((columnId, index) => {
+                    new Sortable(document.getElementById(columnId), {
+                        group: 'tasks',
+                        animation: 300,
+                        ghostClass: 'sortable-ghost',
+                        chosenClass: 'bg-baby-blue-50',
+                        onEnd: (evt) => {
+                            const taskId = evt.item.dataset.taskId;
+                            const newStatus = statuses[index];
+                            this.updateTaskStatus(taskId, newStatus);
+                        }
+                    });
+                });
+            }
+
+            updateTaskStatus(taskId, newStatus) {
+                const task = this.tasks.find(t => t.id === taskId);
+                if (task && task.status !== newStatus) {
+                    const oldStatus = task.status;
+                    task.status = newStatus;
+                    
+                    if (newStatus === 'done' && oldStatus !== 'done') {
+                        task.completedAt = new Date().toISOString();
+                        this.showCelebration();
+                        this.checkAchievements();
+                    }
+                    
+                    this.saveTasks();
+                    this.updateStats();
+                    this.updateCharts();
+                    this.updateCounters();
+                }
+            }
+
+            showCelebration() {
+                const celebration = document.getElementById('celebration');
+                celebration.classList.remove('hidden');
+                
+                const symbols = ['✨', '⭐', '💜', '💙', '💎', '🌟', '💖', '🦋'];
+                for (let i = 0; i < 25; i++) {
+                    this.createConfetti(symbols[Math.floor(Math.random() * symbols.length)]);
+                }
+                
+                setTimeout(() => {
+                    celebration.classList.add('hidden');
+                }, 3000);
+            }
+
+            createConfetti(symbol) {
+                const confetti = document.createElement('div');
+                confetti.innerHTML = symbol;
+                confetti.style.position = 'fixed';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.top = '-50px';
+                confetti.style.fontSize = (16 + Math.random() * 16) + 'px';
+                confetti.style.pointerEvents = 'none';
+                confetti.style.zIndex = '41';
+                confetti.style.animation = `confetti-fall ${2 + Math.random() * 2}s linear forwards`;
+                
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => {
+                    confetti.remove();
+                }, 4000);
+            }
+
+            generateId() {
+                return 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            saveTask() {
+                const title = document.getElementById('taskTitle').value.trim();
+                const description = document.getElementById('taskDescription').value.trim();
+                const priority = document.getElementById('taskPriority').value;
+                const dueDate = document.getElementById('taskDueDate').value;
+                const tags = document.getElementById('taskTags').value.trim();
+
+                if (!title) {
+                    alert('Por favor, ingresa un título para la tarea');
+                    return;
+                }
+
+                const taskData = {
+                    title,
+                    description,
+                    priority,
+                    dueDate,
+                    tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+                    createdAt: new Date().toISOString()
+                };
+
+                if (this.currentEditId) {
+                    const task = this.tasks.find(t => t.id === this.currentEditId);
+                    Object.assign(task, taskData);
+                } else {
+                    taskData.id = this.generateId();
+                    taskData.status = 'todo';
+                    this.tasks.push(taskData);
+                }
+
+                this.saveTasks();
+                this.renderTasks();
+                this.updateStats();
+                this.updateCharts();
+                this.checkAchievements();
+                this.closeModal();
+            }
+
+            editTask(taskId) {
+                const task = this.tasks.find(t => t.id === taskId);
+                if (!task) return;
+
+                this.currentEditId = taskId;
+                document.getElementById('modalTitle').textContent = 'Editar Tarea';
+                document.getElementById('taskTitle').value = task.title;
+                document.getElementById('taskDescription').value = task.description || '';
+                document.getElementById('taskPriority').value = task.priority;
+                document.getElementById('taskDueDate').value = task.dueDate || '';
+                document.getElementById('taskTags').value = task.tags ? task.tags.join(', ') : '';
+                
+                this.openModal();
+            }
+
+            deleteTask(taskId) {
+                if (confirm('¿Estás segura de que quieres eliminar esta tarea?')) {
+                    this.tasks = this.tasks.filter(t => t.id !== taskId);
+                    this.saveTasks();
+                    this.renderTasks();
+                    this.updateStats();
+                    this.updateCharts();
+                    this.checkAchievements();
+                }
+            }
+
+            openModal() {
+                document.getElementById('taskModal').classList.remove('hidden');
+                document.getElementById('taskTitle').focus();
+            }
+
+            closeModal() {
+                document.getElementById('taskModal').classList.add('hidden');
+                document.getElementById('taskForm').reset();
+                document.getElementById('modalTitle').textContent = 'Nueva Tarea';
+                this.currentEditId = null;
+            }
+
+            getPriorityColor(priority) {
+                const colors = {
+                    high: 'bg-gradient-to-r from-purple-400 to-purple-500',
+                    medium: 'bg-gradient-to-r from-baby-blue-400 to-purple-400',
+                    low: 'bg-gradient-to-r from-baby-blue-300 to-baby-blue-400'
+                };
+                return colors[priority] || colors.low;
+            }
+
+            getPriorityText(priority) {
+                const texts = {
+                    high: 'Alta Prioridad',
+                    medium: 'Prioridad Media',
+                    low: 'Baja Prioridad'
+                };
+                return texts[priority] || 'Baja Prioridad';
+            }
+
+            getPriorityIcon(priority) {
+                const icons = {
+                    high: 'fas fa-exclamation-circle text-purple-500',
+                    medium: 'fas fa-clock text-baby-blue-500',
+                    low: 'fas fa-circle text-baby-blue-400'
+                };
+                return icons[priority] || icons.low;
+            }
+
+            formatDate(dateString) {
+                if (!dateString) return '';
+                const date = new Date(dateString);
+                return date.toLocaleDateString('es-ES', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric' 
+                });
+            }
+
+            isOverdue(dueDate) {
+                if (!dueDate) return false;
+                return new Date(dueDate) < new Date();
+            }
+
+            createTaskCard(task) {
+                const isOverdue = this.isOverdue(task.dueDate);
+                const priorityClass = `priority-${task.priority}`;
+                const priorityColor = this.getPriorityColor(task.priority);
+                const priorityText = this.getPriorityText(task.priority);
+                const priorityIcon = this.getPriorityIcon(task.priority);
+                
+                const tags = task.tags && task.tags.length > 0 ? 
+                    task.tags.map(tag => `<span class="tag-style px-3 py-1 rounded-full text-xs">${tag}</span>`).join(' ') : '';
+                
+                return `
+                    <div class="task-card rounded-xl p-5 shadow-lg hover:shadow-xl ${priorityClass}" data-task-id="${task.id}">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="font-semibold text-slate-700 text-lg leading-tight flex-1 pr-2">${task.title}</h3>
+                            <div class="flex gap-2">
+                                <button onclick="kanban.editTask('${task.id}')" class="text-baby-blue-400 hover:text-baby-blue-600 transition-colors p-2 hover:bg-baby-blue-50 rounded-lg">
+                                    <i class="fas fa-edit text-sm"></i>
+                                </button>
+                                <button onclick="kanban.deleteTask('${task.id}')" class="text-baby-blue-400 hover:text-baby-blue-600 transition-colors p-2 hover:bg-baby-blue-50 rounded-lg">
+                                    <i class="fas fa-trash text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        ${task.description ? `<p class="text-slate-600 mb-4 text-sm leading-relaxed">${task.description}</p>` : ''}
+                        
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="${priorityColor} text-white px-3 py-1 rounded-full text-xs font-medium shadow-sm">
+                                ${priorityText}
+                            </span>
+                            <i class="${priorityIcon} text-sm"></i>
+                        </div>
+                        
+                        ${task.dueDate ? `
+                            <div class="flex items-center gap-2 mb-4 text-sm ${isOverdue ? 'text-red-500 font-semibold bg-red-50 p-2 rounded-lg' : 'text-slate-600 bg-baby-blue-50 p-2 rounded-lg'}">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>${this.formatDate(task.dueDate)}</span>
+                                ${isOverdue ? '<span class="text-red-500 text-xs font-bold">¡Vencida!</span>' : ''}
+                            </div>
+                        ` : ''}
+                        
+                        ${tags ? `<div class="flex flex-wrap gap-2 mb-4">${tags}</div>` : ''}
+                        
+                        <div class="flex items-center justify-between text-xs text-slate-500 bg-baby-blue-50 p-2 rounded-lg">
+                            <span><i class="fas fa-calendar-plus mr-1"></i>${this.formatDate(task.createdAt)}</span>
+                            ${task.completedAt ? `<span class="text-green-600 font-semibold"><i class="fas fa-check-circle mr-1"></i>Completada</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderTasks() {
+                const todoColumn = document.getElementById('todoColumn');
+                const progressColumn = document.getElementById('progressColumn');
+                const doneColumn = document.getElementById('doneColumn');
+
+                todoColumn.innerHTML = '';
+                progressColumn.innerHTML = '';
+                doneColumn.innerHTML = '';
+
+                this.tasks.forEach(task => {
+                    const taskCard = this.createTaskCard(task);
+                    
+                    switch(task.status) {
+                        case 'todo':
+                            todoColumn.innerHTML += taskCard;
+                            break;
+                        case 'progress':
+                            progressColumn.innerHTML += taskCard;
+                            break;
+                        case 'done':
+                            doneColumn.innerHTML += taskCard;
+                            break;
+                    }
+                });
+
+                this.updateCounters();
+            }
+
+            updateCounters() {
+                const todoCount = this.tasks.filter(t => t.status === 'todo').length;
+                const progressCount = this.tasks.filter(t => t.status === 'progress').length;
+                const doneCount = this.tasks.filter(t => t.status === 'done').length;
+
+                document.getElementById('todoCount').textContent = todoCount;
+                document.getElementById('progressCount').textContent = progressCount;
+                document.getElementById('doneCount').textContent = doneCount;
+            }
+
+            updateStats() {
+                const total = this.tasks.length;
+                const completed = this.tasks.filter(t => t.status === 'done').length;
+                const inProgress = this.tasks.filter(t => t.status === 'progress').length;
+                const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                document.getElementById('totalTasks').textContent = total;
+                document.getElementById('completedTasks').textContent = completed;
+                document.getElementById('progressTasks').textContent = inProgress;
+                document.getElementById('progressPercentage').textContent = percentage + '%';
+            }
+
+            showStats() {
+                const panel = document.getElementById('statsPanel');
+                panel.classList.toggle('hidden');
+                
+                if (!panel.classList.contains('hidden')) {
+                    setTimeout(() => this.updateCharts(), 200);
+                }
+            }
+
+            initCharts() {
+                this.createTasksChart();
+                this.createPriorityChart();
+            }
+
+            updateCharts() {
+                if (this.charts.tasksChart) {
+                    this.charts.tasksChart.destroy();
+                }
+                if (this.charts.priorityChart) {
+                    this.charts.priorityChart.destroy();
+                }
+                setTimeout(() => this.initCharts(), 100);
+            }
+
+            createTasksChart() {
+                const ctx = document.getElementById('tasksChart');
+                if (!ctx) return;
+
+                const todoCount = this.tasks.filter(t => t.status === 'todo').length;
+                const progressCount = this.tasks.filter(t => t.status === 'progress').length;
+                const doneCount = this.tasks.filter(t => t.status === 'done').length;
+
+                this.charts.tasksChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Por Hacer', 'En Progreso', 'Completadas'],
+                        datasets: [{
+                            data: [todoCount, progressCount, doneCount],
+                            backgroundColor: [
+                                'rgba(125, 211, 252, 0.8)',
+                                'rgba(168, 85, 247, 0.8)',
+                                'rgba(147, 51, 234, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(125, 211, 252, 1)',
+                                'rgba(168, 85, 247, 1)',
+                                'rgba(147, 51, 234, 1)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#475569',
+                                    font: {
+                                        family: 'Inter',
+                                        weight: '500'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            createPriorityChart() {
+                const ctx = document.getElementById('priorityChart');
+                if (!ctx) return;
+
+                const completedByPriority = {
+                    high: this.tasks.filter(t => t.status === 'done' && t.priority === 'high').length,
+                    medium: this.tasks.filter(t => t.status === 'done' && t.priority === 'medium').length,
+                    low: this.tasks.filter(t => t.status === 'done' && t.priority === 'low').length
+                };
+
+                this.charts.priorityChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Alta', 'Media', 'Baja'],
+                        datasets: [{
+                            label: 'Tareas Completadas',
+                            data: [completedByPriority.high, completedByPriority.medium, completedByPriority.low],
+                            backgroundColor: [
+                                'rgba(147, 51, 234, 0.8)',
+                                'rgba(56, 189, 248, 0.8)',
+                                'rgba(125, 211, 252, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(147, 51, 234, 1)',
+                                'rgba(56, 189, 248, 1)',
+                                'rgba(125, 211, 252, 1)'
+                            ],
+                            borderWidth: 2,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#475569',
+                                    font: {
+                                        family: 'Inter',
+                                        weight: '500'
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                ticks: { 
+                                    color: '#475569',
+                                    font: {
+                                        family: 'Inter'
+                                    }
+                                },
+                                grid: { color: 'rgba(125, 211, 252, 0.15)' }
+                            },
+                            x: {
+                                ticks: { 
+                                    color: '#475569',
+                                    font: {
+                                        family: 'Inter'
+                                    }
+                                },
+                                grid: { color: 'rgba(125, 211, 252, 0.15)' }
+                            }
+                        }
+                    }
+                });
+            }
+
+            checkAchievements() {
+                const completedTasks = this.tasks.filter(t => t.status === 'done').length;
+                const totalTasks = this.tasks.length;
+                let newAchievements = [];
+
+                if (totalTasks >= 1 && !this.achievements[0].unlocked) {
+                    this.achievements[0].unlocked = true;
+                    newAchievements.push(this.achievements[0]);
+                }
+
+                if (completedTasks >= 5 && !this.achievements[1].unlocked) {
+                    this.achievements[1].unlocked = true;
+                    newAchievements.push(this.achievements[1]);
+                }
+
+                if (completedTasks >= 10 && !this.achievements[2].unlocked) {
+                    this.achievements[2].unlocked = true;
+                    newAchievements.push(this.achievements[2]);
+                }
+
+                if (completedTasks >= 20 && !this.achievements[3].unlocked) {
+                    this.achievements[3].unlocked = true;
+                    newAchievements.push(this.achievements[3]);
+                }
+
+                if (newAchievements.length > 0) {
+                    this.showAchievementNotification(newAchievements);
+                }
+
+                this.renderAchievements();
+                localStorage.setItem('kanbanAchievements', JSON.stringify(this.achievements));
+            }
+
+            showAchievementNotification(achievements) {
+                achievements.forEach((achievement, index) => {
+                    setTimeout(() => {
+                        const notification = document.createElement('div');
+                        notification.className = 'fixed top-24 right-6 bg-gradient-to-r from-baby-blue-400 to-purple-400 text-white p-4 rounded-xl shadow-xl z-50 border border-baby-blue-300';
+                        notification.innerHTML = `
+                            <div class="flex items-center gap-3">
+                                <div class="text-2xl">${achievement.icon}</div>
+                                <div>
+                                    <div class="font-bold">¡Logro Desbloqueado!</div>
+                                    <div class="text-sm opacity-90">${achievement.name}</div>
+                                </div>
+                                <button onclick="this.parentElement.parentElement.remove()" class="text-white hover:text-baby-blue-200 ml-2">
+                                    <i class="fas fa-times text-sm"></i>
+                                </button>
+                            </div>
+                        `;
+                        document.body.appendChild(notification);
+                        
+                        setTimeout(() => {
+                            if (notification.parentElement) {
+                                notification.remove();
+                            }
+                        }, 6000);
+                    }, index * 800);
+                });
+            }
+
+            renderAchievements() {
+                const container = document.getElementById('achievementBadges');
+                if (!container) return;
+
+                container.innerHTML = this.achievements.map(achievement => `
+                    <div class="text-center p-4 glass-effect rounded-xl transition-all duration-300 hover:scale-105 ${achievement.unlocked ? 'border-baby-blue-300 shadow-lg' : 'grayscale opacity-60'}">
+                        <div class="text-3xl mb-2">${achievement.icon}</div>
+                        <div class="font-semibold text-slate-700 text-sm">${achievement.name}</div>
+                        <div class="text-xs text-slate-600 mb-2">${achievement.description}</div>
+                        ${achievement.unlocked ? '<div class="text-xs text-green-700 font-semibold bg-green-100 px-2 py-1 rounded-full">Desbloqueado</div>' : '<div class="text-xs text-gray-500">Bloqueado</div>'}
+                    </div>
+                `).join('');
+            }
+
+            saveTasks() {
+                localStorage.setItem('kanbanTasks', JSON.stringify(this.tasks));
+            }
+        }
+
+        const kanban = new KanbanBoard();
+        window.kanban = kanban;
+
+        if (kanban.tasks.length === 0) {
+            kanban.tasks = [
+                {
+                    id: 'task_example_1',
+                    title: 'Revisar propuesta de proyecto',
+                    description: 'Analizar los detalles y requisitos del nuevo proyecto cliente',
+                    status: 'todo',
+                    priority: 'high',
+                    dueDate: '2024-12-25',
+                    tags: ['trabajo', 'cliente', 'revisión'],
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: 'task_example_2',
+                    title: 'Actualizar presentación',
+                    description: 'Incorporar feedback del equipo en las diapositivas',
+                    status: 'progress',
+                    priority: 'medium',
+                    dueDate: '2024-12-20',
+                    tags: ['presentación', 'equipo'],
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: 'task_example_3',
+                    title: 'Organizar escritorio',
+                    description: 'Limpiar y organizar el espacio de trabajo',
+                    status: 'done',
+                    priority: 'low',
+                    tags: ['organización', 'personal'],
+                    createdAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString()
+                }
+            ];
+            kanban.saveTasks();
+            kanban.renderTasks();
+            kanban.updateStats();
+            kanban.checkAchievements();
+        }
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes confetti-fall {
+                0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+                100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
+
